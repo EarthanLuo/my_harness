@@ -29,7 +29,9 @@ function generateCategory({ manifest, category, repoRoot, overlayDir, skillsOut,
     }
 
     if (overlayDir) {
-      const ov = join(overlayDir, category, entry.name);
+      const ov = category === 'skills'
+        ? join(overlayDir, entry.name)
+        : join(overlayDir, category, entry.name);
       if (existsSync(ov)) {
         if (statSync(ov).isDirectory()) {
           cpSync(ov, destDir, { recursive: true, force: true });

@@ -79,8 +79,8 @@ test('rebuilds cleanly: a removed skill does not linger', () => {
 test('overlay files override the copied skill', () => {
   const { root, manifestPath, outDir } = setup();
   const overlayDir = join(root, 'overlays');
-  mkdirSync(join(overlayDir, 'skills', 'normal'), { recursive: true });
-  writeFileSync(join(overlayDir, 'skills', 'normal', 'SKILL.md'), '---\nname: normal\n---\npatched\n');
+  mkdirSync(join(overlayDir, 'normal'), { recursive: true });
+  writeFileSync(join(overlayDir, 'normal', 'SKILL.md'), '---\nname: normal\n---\npatched\n');
   generate({ repoRoot: root, manifestPath, outDir, overlayDir });
   const patched = readFileSync(join(outDir, 'skills', 'normal', 'SKILL.md'), 'utf8');
   assert.match(patched, /patched/);
@@ -102,8 +102,8 @@ test('overlay replaces SKILL.md content and non-overlay skills are unaffected', 
     ],
   }));
   const overlayDir = join(root, 'overlays');
-  mkdirSync(join(overlayDir, 'skills', 'target'), { recursive: true });
-  writeFileSync(join(overlayDir, 'skills', 'target', 'SKILL.md'), '---\nname: target\n---\n# Overlayed Title\n\nAdded section with unique marker: OVL-a1b2.\n');
+  mkdirSync(join(overlayDir, 'target'), { recursive: true });
+  writeFileSync(join(overlayDir, 'target', 'SKILL.md'), '---\nname: target\n---\n# Overlayed Title\n\nAdded section with unique marker: OVL-a1b2.\n');
   generate({ repoRoot: root, manifestPath, outDir, overlayDir });
   const target = readFileSync(join(outDir, 'skills', 'target', 'SKILL.md'), 'utf8');
   assert.match(target, /Overlayed Title/);
