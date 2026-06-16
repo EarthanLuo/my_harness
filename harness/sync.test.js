@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
+import { execSync } from 'node:child_process';
 import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory, pruneDirectory, mergeSettings, syncTarget } from './lib/sync.js';
+
+const syncPath = join(import.meta.dirname, 'sync.js');
 
 function writeConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'sync-'));
@@ -425,4 +428,62 @@ test('syncTarget: throws on invalid target settings.json', () => {
     () => syncTarget(src, dst, { prune: false, overwriteSettings: false, dryRun: false }),
     /failed to parse settings.json/,
   );
+});
+
+const fwd = (p) => p.replace(/\\/g, '/');
+const sp = fwd(syncPath);
+
+test('CLI: syncs to target, produces expected output', () => {
+  const { src, dst } = setupClaude();
+  const out = execSync(`node "${sp}" --targets "${fwd(dst)}" --source "${fwd(src)}" --no-build`, { encoding: 'utf8' });
+  assert.match(out, /skills/);
+  assert.match(out, /hooks/);
+  assert.match(out, /OK/);
+  assert.match(out, /1 succeeded/);
+  assert.ok(existsSync(join(dst, '.claude', 'skills', 'alpha', 'SKILL.md')));
+});
+
+test('CLI: --prune forces prune', () => {
+  const { src, dst } = setupClaude();
+  mkdirSync(join(dst, '.claude', 'skills', 'stale'), { recursive: true });
+  writeFileSync(join(dst, '.claude', 'skills', 'stale', 'SKILL.md'), 'old');
+  execSync(`node "${sp}" --targets "${fwd(dst)}" --source "${fwd(src)}" --no-build --prune`, { encoding: 'utf8' });
+  assert.ok(!existsSync(join(dst, '.claude', 'skills', 'stale')));
+});
+
+test('CLI: --dry-run writes nothing', () => {
+  const { src, dst } = setupClaude();
+  const out = execSync(`node "${sp}" --targets "${fwd(dst)}" --source "${fwd(src)}" --no-build --dry-run`, { encoding: 'utf8' });
+  assert.match(out, /would/);
+  assert.ok(!existsSync(join(dst, 'skills', 'alpha')));
+});
+
+test('CLI: missing target marked failed, good target still OK', () => {
+  const { src, dst } = setupClaude();
+  try {
+    execSync(`node "${sp}" --targets "${fwd(dst)}" "${fwd(join(dst, '..', 'ghost'))}" --source "${fwd(src)}" --no-build`, { encoding: 'utf8', stdio: 'pipe' });
+  } catch (e) {
+    assert.match(e.stdout || '', /FAILED/);
+    assert.match(e.stdout || '', /not found/);
+    assert.match(e.stdout || '', /1 failed/);
+    assert.ok(existsSync(join(dst, '.claude', 'skills', 'alpha')));
+  }
+});
+
+test('CLI: verbose shows skill names', () => {
+  const { src, dst } = setupClaude();
+  const out = execSync(`node "${sp}" --targets "${fwd(dst)}" --source "${fwd(src)}" --no-build --verbose`, { encoding: 'utf8' });
+  assert.match(out, /alpha/);
+  assert.match(out, /beta/);
+});
+
+test('CLI: settings parse error marks target failed', () => {
+  const { src, dst } = setupClaude();
+  writeFileSync(join(dst, 'settings.json'), 'bad json');
+  try {
+    execSync(`node "${sp}" --targets "${fwd(dst)}" --source "${fwd(src)}" --no-build`, { encoding: 'utf8', stdio: 'pipe' });
+  } catch (e) {
+    assert.match(e.stdout || '', /FAILED/);
+    assert.match(e.stdout || '', /0 succeeded.*1 failed/);
+  }
 });
