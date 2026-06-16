@@ -52,7 +52,7 @@ export function syncDirectory(srcDir, dstDir, { dryRun = false } = {}) {
     const sp = join(srcDir, name), dp = join(dstDir, name);
     const st = statSync(sp);
     if (st.isDirectory()) {
-      if (existsSync(dp) && statSync(dp).isFile()) rmSync(dp);
+      if (!dryRun && existsSync(dp) && statSync(dp).isFile()) rmSync(dp);
       const sub = syncDirectory(sp, dp, { dryRun });
       updated += sub.updated; unchanged += sub.unchanged;
     } else {
@@ -139,7 +139,7 @@ export function syncTarget(srcClaude, dstClaude, options = {}) {
 
   const ssp = join(srcClaude, 'settings.json'), dsp = join(dstClaude, 'settings.json');
   if (!existsSync(ssp)) return result;
-  mkdirSync(dstClaude, { recursive: true });
+  if (!dryRun) mkdirSync(dstClaude, { recursive: true });
 
   if (!existsSync(dsp)) {
     if (!dryRun) writeFileSync(dsp, readFileSync(ssp));
