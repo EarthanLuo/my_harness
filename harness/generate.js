@@ -66,15 +66,13 @@ function generateCategory({ manifest, category, repoRoot, overlayDir, skillsOut,
 
 export function generate({ repoRoot, manifestPath, outDir, overlayDir, categories = ['skills', 'hooks', 'commands'] }) {
   const manifest = loadManifest(manifestPath);
-  const selectedCategories = categories.filter(category => ['skills', 'hooks', 'commands'].includes(category));
 
-  const cleanDirs = {
-    skills: join(outDir, 'skills'),
-    hooks: join(outDir, 'hooks'),
-    commands: join(outDir, 'commands'),
-  };
+  const cleanDirs = {};
+  for (const category of categories) {
+    cleanDirs[category] = join(outDir, category);
+  }
 
-  for (const category of selectedCategories) {
+  for (const category of categories) {
     const dir = cleanDirs[category];
     if (manifest[category] && manifest[category].length > 0) {
       rmSync(dir, { recursive: true, force: true });
@@ -84,7 +82,8 @@ export function generate({ repoRoot, manifestPath, outDir, overlayDir, categorie
 
   const built = { skills: [], hooks: [], commands: [] };
 
-  for (const category of selectedCategories) {
+  for (const category of categories) {
+    built[category] = [];
     generateCategory({
       manifest,
       category,
@@ -152,9 +151,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     outDir: resolve(repoRoot, '.codex'),
   });
 
+  const opencodeBuilt = generate({
+    repoRoot,
+    manifestPath: resolve(import.meta.dirname, 'manifest.json'),
+    outDir: resolve(repoRoot, '.opencode'),
+    overlayDir: resolve(import.meta.dirname, 'overlays'),
+    categories: ['plugins'],
+  });
+
   const claudeTotal = claudeBuilt.skills.length + claudeBuilt.hooks.length + claudeBuilt.commands.length;
   console.log(`Generated .claude/: ${claudeBuilt.skills.length} skills, ${claudeBuilt.hooks.length} hooks, ${claudeBuilt.commands.length} commands`);
   console.log(`Generated .agents/: ${agentBuilt.skills.length} skills`);
   console.log(`Generated .codex/: ${codexBuilt.hooks.length} hooks, hooks.json`);
-  console.log(`Total: ${claudeTotal + agentBuilt.skills.length + codexBuilt.hooks.length + 1} files`);
+  console.log(`Generated .opencode/: ${opencodeBuilt.plugins.length} plugins`);
+  console.log(`Total: ${claudeTotal + agentBuilt.skills.length + codexBuilt.hooks.length + 1 + opencodeBuilt.plugins.length} files`);
 }

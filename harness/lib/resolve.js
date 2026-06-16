@@ -26,6 +26,8 @@ export function loadManifest(manifestPath) {
 
   if (m.commands) validateEntries(m.commands, m.sources, 'command');
 
+  if (m.plugins) validateEntries(m.plugins, m.sources, 'plugin');
+
   return m;
 }
 
