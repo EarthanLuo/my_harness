@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { generate } from './generate.js';
+import { generate, generateSettings } from './generate.js';
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), 'gen-'));
@@ -23,10 +23,35 @@ function setup() {
   return { root, manifestPath, outDir: join(root, '.claude') };
 }
 
+function setupMulti() {
+  const root = mkdtempSync(join(tmpdir(), 'gen-'));
+  mkdirSync(join(root, 'src', 'normal'), { recursive: true });
+  writeFileSync(join(root, 'src', 'normal', 'SKILL.md'), '---\nname: normal\n---\nhi\n');
+  mkdirSync(join(root, 'src', 'cmd-source'), { recursive: true });
+  writeFileSync(join(root, 'src', 'cmd-source', 'mycmd.md'), '---\nmodel: haiku\n---\n# /mycmd\n');
+  const manifestPath = join(root, 'manifest.json');
+  writeFileSync(manifestPath, JSON.stringify({
+    sources: { s: 'src' },
+    skills: [
+      { name: 'normal', source: 's', path: 'normal' },
+    ],
+    hooks: [
+      { name: 'hook.ps1', source: 'overlay' },
+    ],
+    commands: [
+      { name: 'mycmd.md', source: 's', path: 'cmd-source/mycmd.md' },
+    ],
+  }));
+  const overlayDir = join(root, 'overlays');
+  mkdirSync(join(overlayDir, 'hooks'), { recursive: true });
+  writeFileSync(join(overlayDir, 'hooks', 'hook.ps1'), '# safety hook\n');
+  return { root, manifestPath, outDir: join(root, '.claude'), overlayDir };
+}
+
 test('copies every skill directory including attachments', () => {
   const { root, manifestPath, outDir } = setup();
   const built = generate({ repoRoot: root, manifestPath, outDir });
-  assert.deepEqual(built.sort(), ['manual', 'normal']);
+  assert.deepEqual(built.skills.sort(), ['manual', 'normal']);
   assert.ok(existsSync(join(outDir, 'skills', 'normal', 'SKILL.md')));
   assert.ok(existsSync(join(outDir, 'skills', 'normal', 'extra.md')));
 });
@@ -54,8 +79,8 @@ test('rebuilds cleanly: a removed skill does not linger', () => {
 test('overlay files override the copied skill', () => {
   const { root, manifestPath, outDir } = setup();
   const overlayDir = join(root, 'overlays');
-  mkdirSync(join(overlayDir, 'normal'), { recursive: true });
-  writeFileSync(join(overlayDir, 'normal', 'SKILL.md'), '---\nname: normal\n---\npatched\n');
+  mkdirSync(join(overlayDir, 'skills', 'normal'), { recursive: true });
+  writeFileSync(join(overlayDir, 'skills', 'normal', 'SKILL.md'), '---\nname: normal\n---\npatched\n');
   generate({ repoRoot: root, manifestPath, outDir, overlayDir });
   const patched = readFileSync(join(outDir, 'skills', 'normal', 'SKILL.md'), 'utf8');
   assert.match(patched, /patched/);
@@ -77,8 +102,8 @@ test('overlay replaces SKILL.md content and non-overlay skills are unaffected', 
     ],
   }));
   const overlayDir = join(root, 'overlays');
-  mkdirSync(join(overlayDir, 'target'), { recursive: true });
-  writeFileSync(join(overlayDir, 'target', 'SKILL.md'), '---\nname: target\n---\n# Overlayed Title\n\nAdded section with unique marker: OVL-a1b2.\n');
+  mkdirSync(join(overlayDir, 'skills', 'target'), { recursive: true });
+  writeFileSync(join(overlayDir, 'skills', 'target', 'SKILL.md'), '---\nname: target\n---\n# Overlayed Title\n\nAdded section with unique marker: OVL-a1b2.\n');
   generate({ repoRoot: root, manifestPath, outDir, overlayDir });
   const target = readFileSync(join(outDir, 'skills', 'target', 'SKILL.md'), 'utf8');
   assert.match(target, /Overlayed Title/);
@@ -87,4 +112,67 @@ test('overlay replaces SKILL.md content and non-overlay skills are unaffected', 
   assert.ok(existsSync(join(outDir, 'skills', 'target', 'helper.md')));
   const bystander = readFileSync(join(outDir, 'skills', 'bystander', 'SKILL.md'), 'utf8');
   assert.match(bystander, /bystander content/);
+});
+
+test('generates hooks, commands, and skills in one run', () => {
+  const { root, manifestPath, outDir, overlayDir } = setupMulti();
+  const built = generate({ repoRoot: root, manifestPath, outDir, overlayDir });
+
+  assert.deepEqual(built.skills, ['normal']);
+  assert.deepEqual(built.hooks, ['hook.ps1']);
+  assert.deepEqual(built.commands, ['mycmd.md']);
+
+  assert.ok(existsSync(join(outDir, 'skills', 'normal', 'SKILL.md')));
+  assert.ok(existsSync(join(outDir, 'hooks', 'hook.ps1')));
+  assert.ok(existsSync(join(outDir, 'commands', 'mycmd.md')));
+});
+
+test('overlay-only hooks skip source copy', () => {
+  const { root, manifestPath, outDir, overlayDir } = setupMulti();
+  generate({ repoRoot: root, manifestPath, outDir, overlayDir });
+
+  const hook = readFileSync(join(outDir, 'hooks', 'hook.ps1'), 'utf8');
+  assert.match(hook, /safety hook/);
+});
+
+test('commands copy single file from source path', () => {
+  const { root, manifestPath, outDir, overlayDir } = setupMulti();
+  generate({ repoRoot: root, manifestPath, outDir, overlayDir });
+
+  const cmd = readFileSync(join(outDir, 'commands', 'mycmd.md'), 'utf8');
+  assert.match(cmd, /# \/mycmd/);
+});
+
+test('settings.json is written to outDir', () => {
+  const { root, manifestPath, outDir } = setupMulti();
+  const settingsPath = join(root, 'settings.json');
+  writeFileSync(settingsPath, JSON.stringify({ permissions: { allow: [] } }));
+  generate({ repoRoot: root, manifestPath, outDir });
+  generateSettings({ outDir, settingsPath });
+
+  assert.ok(existsSync(join(outDir, 'settings.json')));
+  const settings = JSON.parse(readFileSync(join(outDir, 'settings.json'), 'utf8'));
+  assert.deepEqual(settings, { permissions: { allow: [] } });
+});
+
+test('rmSync is scoped per category', () => {
+  const { root, manifestPath, outDir, overlayDir } = setupMulti();
+  generate({ repoRoot: root, manifestPath, outDir, overlayDir });
+
+  writeFileSync(join(outDir, 'commands', 'stale.md'), 'should be removed');
+  writeFileSync(manifestPath, JSON.stringify({
+    sources: { s: 'src' },
+    skills: [{ name: 'normal', source: 's', path: 'normal' }],
+    hooks: [{ name: 'hook.ps1', source: 'overlay' }],
+    commands: [
+      { name: 'mycmd.md', source: 's', path: 'cmd-source/mycmd.md' },
+    ],
+  }));
+
+  generate({ repoRoot: root, manifestPath, outDir, overlayDir });
+
+  assert.ok(!existsSync(join(outDir, 'commands', 'stale.md')));
+  assert.ok(existsSync(join(outDir, 'commands', 'mycmd.md')));
+  assert.ok(existsSync(join(outDir, 'hooks', 'hook.ps1')));
+  assert.ok(existsSync(join(outDir, 'skills', 'normal', 'SKILL.md')));
 });
