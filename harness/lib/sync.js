@@ -86,3 +86,40 @@ export function pruneDirectory(srcDir, dstDir, { dryRun = false } = {}) {
   }
   return { deleted };
 }
+
+export function mergeSettings(srcSettings, dstSettings) {
+  const S = srcSettings || {}, D = dstSettings || {};
+  const merged = { ...D };
+
+  const sa = S.permissions?.allow || [], da = D.permissions?.allow || [];
+  if (sa.length + da.length > 0) {
+    merged.permissions = { ...(merged.permissions || {}) };
+    merged.permissions.allow = [...new Set([...da, ...sa])];
+  }
+  const sd = S.permissions?.deny || [], dd = D.permissions?.deny || [];
+  if (sd.length + dd.length > 0) {
+    merged.permissions = { ...(merged.permissions || {}) };
+    merged.permissions.deny = [...new Set([...dd, ...sd])];
+  }
+
+  const events = new Set([...Object.keys(S.hooks || {}), ...Object.keys(D.hooks || {})]);
+  if (events.size > 0) {
+    merged.hooks = { ...(merged.hooks || {}) };
+    for (const ev of events) {
+      const sh = S.hooks?.[ev] || [], dh = D.hooks?.[ev] || [];
+      const seen = new Set(), mh = [...dh];
+      for (const h of dh) seen.add(JSON.stringify({ type: h.type, command: h.command }));
+      for (const h of sh) {
+        const k = JSON.stringify({ type: h.type, command: h.command });
+        if (!seen.has(k)) { mh.push(h); seen.add(k); }
+      }
+      merged.hooks[ev] = mh;
+    }
+  }
+
+  for (const k of Object.keys(S)) {
+    if (k === 'permissions' || k === 'hooks') continue;
+    if (!(k in merged)) merged[k] = S[k];
+  }
+  return merged;
+}

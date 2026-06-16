@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
-import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory, pruneDirectory } from './lib/sync.js';
+import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory, pruneDirectory, mergeSettings } from './lib/sync.js';
 
 function writeConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'sync-'));
@@ -278,4 +278,63 @@ test('pruneDirectory: dryRun reports but does not delete', () => {
   const r = pruneDirectory(src, dst, { dryRun: true });
   assert.equal(r.deleted, 1);
   assert.ok(existsSync(join(dst, 'extra.txt')));
+});
+
+test('mergeSettings: unions permissions.allow', () => {
+  const r = mergeSettings(
+    { permissions: { allow: ['a', 'b'] } },
+    { permissions: { allow: ['b', 'c'] } },
+  );
+  assert.deepEqual(r.permissions.allow.sort(), ['a', 'b', 'c']);
+});
+
+test('mergeSettings: unions permissions.deny', () => {
+  const r = mergeSettings(
+    { permissions: { deny: ['x'] } },
+    { permissions: { deny: ['y'] } },
+  );
+  assert.deepEqual(r.permissions.deny.sort(), ['x', 'y']);
+});
+
+test('mergeSettings: handles one-sided permissions', () => {
+  assert.deepEqual(mergeSettings({}, { permissions: { allow: ['d'] } }).permissions.allow, ['d']);
+  assert.deepEqual(mergeSettings({ permissions: { allow: ['s'] } }, {}).permissions.allow, ['s']);
+});
+
+test('mergeSettings: deduplicates hooks by type+command, target priority', () => {
+  const src = { hooks: { PreToolUse: [
+    { type: 'command', command: 'a.ps1', timeout: 5 },
+    { type: 'command', command: 'new.ps1', timeout: 3 },
+  ]}};
+  const dst = { hooks: { PreToolUse: [
+    { type: 'command', command: 'a.ps1', timeout: 30 },
+    { type: 'command', command: 'b.ps1', timeout: 10 },
+  ]}};
+  const r = mergeSettings(src, dst);
+  assert.equal(r.hooks.PreToolUse.length, 3);
+  assert.equal(r.hooks.PreToolUse.find(h => h.command === 'a.ps1').timeout, 30);
+  assert.ok(r.hooks.PreToolUse.find(h => h.command === 'new.ps1'));
+  assert.ok(r.hooks.PreToolUse.find(h => h.command === 'b.ps1'));
+});
+
+test('mergeSettings: merges hooks across events', () => {
+  const src = { hooks: {
+    PreToolUse: [{ type: 'command', command: 's.ps1' }],
+    PostToolUse: [{ type: 'command', command: 'ps.ps1' }],
+  }};
+  const dst = { hooks: { PreToolUse: [{ type: 'command', command: 'd.ps1' }] } };
+  const r = mergeSettings(src, dst);
+  assert.equal(r.hooks.PreToolUse.length, 2);
+  assert.equal(r.hooks.PostToolUse.length, 1);
+});
+
+test('mergeSettings: target-priority for other fields, source-only added', () => {
+  const r = mergeSettings({ cf: 'sv', extra: 'se' }, { cf: 'dv' });
+  assert.equal(r.cf, 'dv');
+  assert.equal(r.extra, 'se');
+});
+
+test('mergeSettings: preserves target-only hooks', () => {
+  const r = mergeSettings({}, { hooks: { N: [{ type: 'command', command: 'n.ps1' }] } });
+  assert.equal(r.hooks.N.length, 1);
 });
