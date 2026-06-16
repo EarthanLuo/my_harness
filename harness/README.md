@@ -1,16 +1,20 @@
 # harness — bundle generator
 
 This directory contains the generator that assembles a curated set of skills
-from the `third-party/` submodules into this repo's dogfooded
-`.claude/skills/` bundle.
+from the `third-party/` submodules into this repo's dogfooded `.claude/` and
+`.codex/` bundles.
 
 ## Purpose
 
-`.claude/skills/` is not hand-maintained. It is generated output: a portable,
-self-contained bundle of skills pulled from the various third-party skill
-collections vendored under `third-party/`. Regenerating it lets us pick up
-upstream changes to those submodules while keeping full control over exactly
+`.claude/` and `.codex/skills/` are not hand-maintained. They are generated
+output: portable, self-contained bundles pulled from the various third-party
+skill collections vendored under `third-party/`. Regenerating them lets us pick
+up upstream changes to those submodules while keeping full control over exactly
 which skills ship and how they behave in this repo.
+
+The Claude bundle includes skills, hooks, commands, and `settings.json`. The
+Codex bundle intentionally emits only skills because Claude Code hooks,
+commands, and settings are not portable Codex project primitives.
 
 ## Selection rationale
 
@@ -48,9 +52,9 @@ silently lost the next time the generator runs and re-copies from upstream.
 cd harness && node generate.js
 ```
 
-Rebuilds `../.claude/skills` from scratch (removing any skills no longer in
-the manifest, copying current ones, and applying overlays and
-`manualOnly` frontmatter flags).
+Rebuilds `../.claude/` and `../.codex/skills` from scratch (removing any
+generated entries no longer in the manifest, copying current ones, and applying
+overlays and `manualOnly` frontmatter flags).
 
 ```
 cd harness && node --test
@@ -58,12 +62,21 @@ cd harness && node --test
 
 Runs the generator's test suite.
 
-## Important: do not hand-edit `.claude/skills/`
+```
+cd harness && node sync.js --suite codex --targets ../some-project
+cd harness && node sync.js --suite both --targets ../some-project
+```
 
-`.claude/skills/` is a committed, portable artifact — copy the whole
-`.claude/` directory into any project to use this bundle there.
+Syncs the generated bundle into target projects. The default suite is
+`claude`; use `codex` for `.codex/` or `both` when a project should carry both
+agent bundles.
+
+## Important: do not hand-edit generated bundles
+
+`.claude/` and `.codex/skills/` are committed, portable artifacts — copy the
+matching directory into any project to use this bundle there.
 
 Because it is regenerated from scratch on every run, any changes made
-directly inside `.claude/skills/` will be silently overwritten the next time
-`node generate.js` runs. If you need a local modification to a skill, put it
-in `harness/overlays/<skill>/` instead, so it survives regeneration.
+directly inside those generated directories will be silently overwritten the
+next time `node generate.js` runs. If you need a local modification to a skill,
+put it in `harness/overlays/<skill>/` instead, so it survives regeneration.

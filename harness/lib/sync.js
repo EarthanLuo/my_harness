@@ -27,7 +27,7 @@ export function resolveTargets(cliTargets, configPath, defaultConfigPath) {
 }
 
 export function resolveFlags(argv) {
-  const flags = { noBuild: false, prune: false, overwriteSettings: false, dryRun: false, verbose: false, targets: [], config: null, source: null };
+  const flags = { noBuild: false, prune: false, overwriteSettings: false, dryRun: false, verbose: false, targets: [], config: null, source: null, suite: 'claude' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--no-build') flags.noBuild = true;
@@ -35,11 +35,15 @@ export function resolveFlags(argv) {
     else if (a === '--overwrite-settings') flags.overwriteSettings = true;
     else if (a === '--dry-run') flags.dryRun = true;
     else if (a === '--verbose') flags.verbose = true;
+    else if (a === '--suite' && i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.suite = argv[++i];
     else if (a === '--source' && i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.source = argv[++i];
     else if (a === '--config' && i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.config = argv[++i];
     else if (a === '--targets') {
       while (i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.targets.push(argv[++i]);
     }
+  }
+  if (!['claude', 'codex', 'both'].includes(flags.suite)) {
+    throw new Error('--suite must be one of: claude, codex, both');
   }
   return flags;
 }

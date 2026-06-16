@@ -176,3 +176,16 @@ test('rmSync is scoped per category', () => {
   assert.ok(existsSync(join(outDir, 'hooks', 'hook.ps1')));
   assert.ok(existsSync(join(outDir, 'skills', 'normal', 'SKILL.md')));
 });
+
+test('can generate a skills-only bundle for Codex', () => {
+  const { root, manifestPath, overlayDir } = setupMulti();
+  const outDir = join(root, '.codex');
+  const built = generate({ repoRoot: root, manifestPath, outDir, overlayDir, categories: ['skills'] });
+
+  assert.deepEqual(built.skills, ['normal']);
+  assert.deepEqual(built.hooks, []);
+  assert.deepEqual(built.commands, []);
+  assert.ok(existsSync(join(outDir, 'skills', 'normal', 'SKILL.md')));
+  assert.ok(!existsSync(join(outDir, 'hooks')));
+  assert.ok(!existsSync(join(outDir, 'commands')));
+});

@@ -12,14 +12,19 @@
   "hooks": {
     "PreToolUse": [
       {
-        "type": "command",
-        "command": "pwsh -NoProfile .claude/hooks/rtk-rewrite.ps1",
-        "timeout": 5
-      },
-      {
-        "type": "command",
-        "command": "pwsh -NoProfile .claude/hooks/safety-guard.ps1",
-        "timeout": 3
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile .claude/hooks/rtk-rewrite.ps1",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile .claude/hooks/safety-guard.ps1",
+            "timeout": 3
+          }
+        ]
       }
     ]
   }

@@ -97,6 +97,7 @@ test('resolveFlags: all defaults false', () => {
   assert.deepEqual(f.targets, []);
   assert.equal(f.config, null);
   assert.equal(f.source, null);
+  assert.equal(f.suite, 'claude');
 });
 
 test('resolveFlags: --no-build, --prune, --overwrite-settings, --dry-run, --verbose', () => {
@@ -126,6 +127,15 @@ test('resolveFlags: --targets at end collects remaining', () => {
 
 test('resolveFlags: --config captures next arg', () => {
   assert.equal(resolveFlags(['--config', 'custom.json']).config, 'custom.json');
+});
+
+test('resolveFlags: --suite captures claude, codex, or both', () => {
+  assert.equal(resolveFlags(['--suite', 'codex']).suite, 'codex');
+  assert.equal(resolveFlags(['--suite', 'both']).suite, 'both');
+});
+
+test('resolveFlags: --suite rejects unknown values', () => {
+  assert.throws(() => resolveFlags(['--suite', 'vim']), /--suite/);
 });
 
 test('resolveFlags: --source followed by flag does not consume it', () => {
@@ -441,6 +451,15 @@ test('CLI: syncs to target, produces expected output', () => {
   assert.match(out, /OK/);
   assert.match(out, /1 succeeded/);
   assert.ok(existsSync(join(dst, '.claude', 'skills', 'alpha', 'SKILL.md')));
+});
+
+test('CLI: --suite codex syncs to .codex', () => {
+  const { src, dst } = setupClaude();
+  const out = execSync(`node "${sp}" --targets "${fwd(dst)}" --source "${fwd(src)}" --suite codex --no-build`, { encoding: 'utf8' });
+  assert.match(out, /suite:\s+codex/);
+  assert.match(out, /\.codex/);
+  assert.ok(existsSync(join(dst, '.codex', 'skills', 'alpha', 'SKILL.md')));
+  assert.ok(!existsSync(join(dst, '.claude', 'skills', 'alpha', 'SKILL.md')));
 });
 
 test('CLI: --prune forces prune', () => {

@@ -50,8 +50,9 @@ function generateCategory({ manifest, category, repoRoot, overlayDir, skillsOut,
   }
 }
 
-export function generate({ repoRoot, manifestPath, outDir, overlayDir }) {
+export function generate({ repoRoot, manifestPath, outDir, overlayDir, categories = ['skills', 'hooks', 'commands'] }) {
   const manifest = loadManifest(manifestPath);
+  const selectedCategories = categories.filter(category => ['skills', 'hooks', 'commands'].includes(category));
 
   const cleanDirs = {
     skills: join(outDir, 'skills'),
@@ -59,7 +60,8 @@ export function generate({ repoRoot, manifestPath, outDir, overlayDir }) {
     commands: join(outDir, 'commands'),
   };
 
-  for (const [category, dir] of Object.entries(cleanDirs)) {
+  for (const category of selectedCategories) {
+    const dir = cleanDirs[category];
     if (manifest[category] && manifest[category].length > 0) {
       rmSync(dir, { recursive: true, force: true });
       mkdirSync(dir, { recursive: true });
@@ -68,7 +70,7 @@ export function generate({ repoRoot, manifestPath, outDir, overlayDir }) {
 
   const built = { skills: [], hooks: [], commands: [] };
 
-  for (const category of ['skills', 'hooks', 'commands']) {
+  for (const category of selectedCategories) {
     generateCategory({
       manifest,
       category,
@@ -91,7 +93,7 @@ export function generateSettings({ outDir, settingsPath }) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const repoRoot = resolve(import.meta.dirname, '..');
-  const built = generate({
+  const claudeBuilt = generate({
     repoRoot,
     manifestPath: resolve(import.meta.dirname, 'manifest.json'),
     outDir: resolve(repoRoot, '.claude'),
@@ -102,7 +104,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     settingsPath: resolve(import.meta.dirname, 'settings.json'),
   });
 
-  const total = built.skills.length + built.hooks.length + built.commands.length;
-  console.log(`Generated .claude/: ${built.skills.length} skills, ${built.hooks.length} hooks, ${built.commands.length} commands`);
-  console.log(`Total: ${total} files`);
+  const codexBuilt = generate({
+    repoRoot,
+    manifestPath: resolve(import.meta.dirname, 'manifest.json'),
+    outDir: resolve(repoRoot, '.codex'),
+    overlayDir: resolve(import.meta.dirname, 'overlays'),
+    categories: ['skills'],
+  });
+
+  const claudeTotal = claudeBuilt.skills.length + claudeBuilt.hooks.length + claudeBuilt.commands.length;
+  console.log(`Generated .claude/: ${claudeBuilt.skills.length} skills, ${claudeBuilt.hooks.length} hooks, ${claudeBuilt.commands.length} commands`);
+  console.log(`Generated .codex/: ${codexBuilt.skills.length} skills`);
+  console.log(`Total: ${claudeTotal + codexBuilt.skills.length} files`);
 }
