@@ -8,7 +8,7 @@
 
 export const RtkOpenCodePlugin = async ({ $ }) => {
   try {
-    await $`which rtk`.quiet()
+    await $`rtk --version`.quiet()
   } catch {
     console.warn("[rtk] rtk binary not found in PATH — plugin disabled")
     return {}
