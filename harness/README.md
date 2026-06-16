@@ -29,6 +29,12 @@ entry specifies:
   `disable-model-invocation: true` in its frontmatter (i.e. invokable only
   when a user explicitly asks for it, not auto-triggered by the model)
 
+The `manualOnly` frontmatter injection preserves the source file's existing
+line-ending style (CRLF vs LF) — important because several vendored skills are
+checked out CRLF on Windows (`core.autocrlf=true`). Don't "simplify"
+`harness/lib/frontmatter.js` to hard-code `\n`; that reintroduces mixed line
+endings (see its CRLF tests).
+
 ## Local patches (overlays)
 
 `harness/overlays/<skill>/` holds local modifications layered on top of a
