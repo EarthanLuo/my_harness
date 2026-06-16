@@ -50,3 +50,14 @@ test('rebuilds cleanly: a removed skill does not linger', () => {
   generate({ repoRoot: root, manifestPath, outDir });
   assert.ok(!existsSync(join(outDir, 'skills', 'manual')));
 });
+
+test('overlay files override the copied skill', () => {
+  const { root, manifestPath, outDir } = setup();
+  const overlayDir = join(root, 'overlays');
+  mkdirSync(join(overlayDir, 'normal'), { recursive: true });
+  writeFileSync(join(overlayDir, 'normal', 'SKILL.md'), '---\nname: normal\n---\npatched\n');
+  generate({ repoRoot: root, manifestPath, outDir, overlayDir });
+  const patched = readFileSync(join(outDir, 'skills', 'normal', 'SKILL.md'), 'utf8');
+  assert.match(patched, /patched/);
+  assert.ok(existsSync(join(outDir, 'skills', 'normal', 'extra.md')));
+});
