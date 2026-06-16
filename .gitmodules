@@ -1,0 +1,18 @@
+[submodule "third-party/deer-flow"]
+	path = third-party/deer-flow
+	url = https://github.com/bytedance/deer-flow.git
+[submodule "third-party/OpenHarness"]
+	path = third-party/OpenHarness
+	url = https://github.com/HKUDS/OpenHarness.git
+[submodule "third-party/ECC"]
+	path = third-party/ECC
+	url = https://github.com/affaan-m/ECC.git
+[submodule "third-party/skills"]
+	path = third-party/skills
+	url = https://github.com/mattpocock/skills.git
+[submodule "third-party/superpowers"]
+	path = third-party/superpowers
+	url = https://github.com/obra/superpowers.git
+[submodule "third-party/rtk"]
+	path = third-party/rtk
+	url = https://github.com/rtk-ai/rtk.git
