@@ -46,7 +46,7 @@ export function resolveFlags(argv) {
 
 export function syncDirectory(srcDir, dstDir, { dryRun = false } = {}) {
   if (!existsSync(srcDir)) return { updated: 0, unchanged: 0 };
-  mkdirSync(dstDir, { recursive: true });
+  if (!dryRun) mkdirSync(dstDir, { recursive: true });
   let updated = 0, unchanged = 0;
   for (const name of readdirSync(srcDir)) {
     const sp = join(srcDir, name), dp = join(dstDir, name);
@@ -122,4 +122,45 @@ export function mergeSettings(srcSettings, dstSettings) {
     if (!(k in merged)) merged[k] = S[k];
   }
   return merged;
+}
+
+const MANAGED_DIRS = ['skills', 'hooks', 'commands'];
+
+export function syncTarget(srcClaude, dstClaude, options = {}) {
+  const { prune = false, overwriteSettings = false, dryRun = false } = options;
+  const result = { skills: {}, hooks: {}, commands: {}, settings: null };
+
+  for (const dir of MANAGED_DIRS) {
+    const sd = join(srcClaude, dir), dd = join(dstClaude, dir);
+    const synced = syncDirectory(sd, dd, { dryRun });
+    if (prune) synced.deleted = pruneDirectory(sd, dd, { dryRun }).deleted;
+    result[dir] = synced;
+  }
+
+  const ssp = join(srcClaude, 'settings.json'), dsp = join(dstClaude, 'settings.json');
+  if (!existsSync(ssp)) return result;
+  mkdirSync(dstClaude, { recursive: true });
+
+  if (!existsSync(dsp)) {
+    if (!dryRun) writeFileSync(dsp, readFileSync(ssp));
+    result.settings = 'written';
+  } else if (overwriteSettings) {
+    if (!dryRun) writeFileSync(dsp, readFileSync(ssp));
+    result.settings = 'overwritten';
+  } else {
+    try {
+      const ss = JSON.parse(readFileSync(ssp, 'utf8'));
+      const ds = JSON.parse(readFileSync(dsp, 'utf8'));
+      const merged = mergeSettings(ss, ds);
+      if (!dryRun) writeFileSync(dsp, JSON.stringify(merged, null, 2) + '\n');
+      result.settings = 'merged';
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        throw Object.assign(new Error(`failed to parse settings.json in target: ${err.message}`), { code: 'SETTINGS_PARSE_ERROR' });
+      }
+      throw err;
+    }
+  }
+
+  return result;
 }

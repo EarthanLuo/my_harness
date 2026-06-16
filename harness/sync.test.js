@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
-import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory, pruneDirectory, mergeSettings } from './lib/sync.js';
+import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory, pruneDirectory, mergeSettings, syncTarget } from './lib/sync.js';
 
 function writeConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'sync-'));
@@ -337,4 +337,92 @@ test('mergeSettings: target-priority for other fields, source-only added', () =>
 test('mergeSettings: preserves target-only hooks', () => {
   const r = mergeSettings({}, { hooks: { N: [{ type: 'command', command: 'n.ps1' }] } });
   assert.equal(r.hooks.N.length, 1);
+});
+
+function setupClaude() {
+  const root = mkdtempSync(join(tmpdir(), 'st-'));
+  const src = join(root, 'src');
+  const dst = join(root, 'dst');
+  mkdirSync(join(src, 'skills', 'alpha'), { recursive: true });
+  mkdirSync(join(src, 'skills', 'beta'), { recursive: true });
+  writeFileSync(join(src, 'skills', 'alpha', 'SKILL.md'), 'alpha md');
+  writeFileSync(join(src, 'skills', 'beta', 'SKILL.md'), 'beta md');
+  mkdirSync(join(src, 'hooks'), { recursive: true });
+  writeFileSync(join(src, 'hooks', 'g.ps1'), '# guard');
+  mkdirSync(join(src, 'commands'), { recursive: true });
+  writeFileSync(join(src, 'commands', 'audit.md'), '# audit');
+  writeFileSync(join(src, 'settings.json'), JSON.stringify({
+    permissions: { allow: ['a'], deny: [] },
+    hooks: { PreToolUse: [{ type: 'command', command: 'h.ps1' }] },
+  }));
+  mkdirSync(dst, { recursive: true });
+  return { root, src, dst };
+}
+
+test('syncTarget: syncs skills/hooks/commands, writes settings on init', () => {
+  const { src, dst } = setupClaude();
+  const r = syncTarget(src, dst, { prune: false, overwriteSettings: false, dryRun: false });
+  assert.equal(r.skills.updated, 2);
+  assert.equal(r.hooks.updated, 1);
+  assert.equal(r.commands.updated, 1);
+  assert.equal(r.settings, 'written');
+  assert.ok(existsSync(join(dst, 'skills', 'alpha', 'SKILL.md')));
+  assert.ok(existsSync(join(dst, 'hooks', 'g.ps1')));
+  assert.ok(existsSync(join(dst, 'settings.json')));
+});
+
+test('syncTarget: merges settings when target has existing', () => {
+  const { src, dst } = setupClaude();
+  writeFileSync(join(dst, 'settings.json'), JSON.stringify({
+    permissions: { allow: ['da'] },
+    extra: 'keep-me',
+  }));
+  const r = syncTarget(src, dst, { prune: false, overwriteSettings: false, dryRun: false });
+  assert.equal(r.settings, 'merged');
+  const m = JSON.parse(readFileSync(join(dst, 'settings.json'), 'utf8'));
+  assert.ok(m.permissions.allow.includes('a') && m.permissions.allow.includes('da'));
+  assert.equal(m.extra, 'keep-me');
+});
+
+test('syncTarget: overwrites settings with flag', () => {
+  const { src, dst } = setupClaude();
+  writeFileSync(join(dst, 'settings.json'), JSON.stringify({ x: 1 }));
+  const r = syncTarget(src, dst, { prune: false, overwriteSettings: true, dryRun: false });
+  assert.equal(r.settings, 'overwritten');
+  assert.ok(!('x' in JSON.parse(readFileSync(join(dst, 'settings.json'), 'utf8'))));
+});
+
+test('syncTarget: prune removes stale managed entries', () => {
+  const { src, dst } = setupClaude();
+  mkdirSync(join(dst, 'skills', 'gamma'), { recursive: true });
+  writeFileSync(join(dst, 'skills', 'gamma', 'SKILL.md'), 'stale');
+  const r = syncTarget(src, dst, { prune: true, overwriteSettings: false, dryRun: false });
+  assert.equal(r.skills.deleted, 1);
+  assert.ok(!existsSync(join(dst, 'skills', 'gamma')));
+  assert.ok(existsSync(join(dst, 'skills', 'alpha')));
+});
+
+test('syncTarget: preserves unmanaged files outside managed dirs', () => {
+  const { src, dst } = setupClaude();
+  mkdirSync(join(dst, 'custom'), { recursive: true });
+  writeFileSync(join(dst, 'custom', 'n.md'), 'mine');
+  syncTarget(src, dst, { prune: true, overwriteSettings: false, dryRun: false });
+  assert.ok(existsSync(join(dst, 'custom', 'n.md')));
+});
+
+test('syncTarget: dryRun writes nothing', () => {
+  const { src, dst } = setupClaude();
+  const r = syncTarget(src, dst, { prune: false, overwriteSettings: false, dryRun: true });
+  assert.ok(r.skills.updated > 0);
+  assert.ok(!existsSync(join(dst, 'skills', 'alpha')));
+  assert.ok(!existsSync(join(dst, 'settings.json')));
+});
+
+test('syncTarget: throws on invalid target settings.json', () => {
+  const { src, dst } = setupClaude();
+  writeFileSync(join(dst, 'settings.json'), 'bad json {{{');
+  assert.throws(
+    () => syncTarget(src, dst, { prune: false, overwriteSettings: false, dryRun: false }),
+    /failed to parse settings.json/,
+  );
 });
