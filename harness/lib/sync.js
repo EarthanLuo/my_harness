@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 
 export function parseTargetsFile(configPath) {
   if (!existsSync(configPath)) throw new Error(`target config file not found: ${configPath}`);
@@ -42,4 +42,26 @@ export function resolveFlags(argv) {
     }
   }
   return flags;
+}
+
+export function syncDirectory(srcDir, dstDir, { dryRun = false } = {}) {
+  if (!existsSync(srcDir)) return { updated: 0, unchanged: 0 };
+  mkdirSync(dstDir, { recursive: true });
+  let updated = 0, unchanged = 0;
+  for (const name of readdirSync(srcDir)) {
+    const sp = join(srcDir, name), dp = join(dstDir, name);
+    const st = statSync(sp);
+    if (st.isDirectory()) {
+      const sub = syncDirectory(sp, dp, { dryRun });
+      updated += sub.updated; unchanged += sub.unchanged;
+    } else {
+      let needs = true;
+      if (existsSync(dp) && statSync(dp).isFile()) {
+        const sb = readFileSync(sp), db = readFileSync(dp);
+        if (sb.equals(db)) { needs = false; unchanged++; }
+      }
+      if (needs) { if (!dryRun) writeFileSync(dp, readFileSync(sp)); updated++; }
+    }
+  }
+  return { updated, unchanged };
 }
