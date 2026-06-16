@@ -372,6 +372,28 @@ function setupClaude() {
   return { root, src, dst };
 }
 
+function setupCodex() {
+  const root = mkdtempSync(join(tmpdir(), 'st-'));
+  const src = join(root, 'src');
+  const dst = join(root, 'dst');
+  mkdirSync(join(src, '.agents', 'skills', 'alpha'), { recursive: true });
+  writeFileSync(join(src, '.agents', 'skills', 'alpha', 'SKILL.md'), 'alpha md');
+  mkdirSync(join(src, '.codex', 'hooks'), { recursive: true });
+  writeFileSync(join(src, '.codex', 'hooks', 'guard.ps1'), '# guard');
+  writeFileSync(join(src, '.codex', 'hooks.json'), JSON.stringify({
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [{ type: 'command', command: 'pwsh .codex/hooks/guard.ps1' }],
+        },
+      ],
+    },
+  }));
+  mkdirSync(dst, { recursive: true });
+  return { root, src, dst };
+}
+
 test('syncTarget: syncs skills/hooks/commands, writes settings on init', () => {
   const { src, dst } = setupClaude();
   const r = syncTarget(src, dst, { prune: false, overwriteSettings: false, dryRun: false });
@@ -453,12 +475,15 @@ test('CLI: syncs to target, produces expected output', () => {
   assert.ok(existsSync(join(dst, '.claude', 'skills', 'alpha', 'SKILL.md')));
 });
 
-test('CLI: --suite codex syncs to .codex', () => {
-  const { src, dst } = setupClaude();
+test('CLI: --suite codex syncs to .agents and .codex hooks', () => {
+  const { src, dst } = setupCodex();
   const out = execSync(`node "${sp}" --targets "${fwd(dst)}" --source "${fwd(src)}" --suite codex --no-build`, { encoding: 'utf8' });
   assert.match(out, /suite:\s+codex/);
+  assert.match(out, /\.agents/);
   assert.match(out, /\.codex/);
-  assert.ok(existsSync(join(dst, '.codex', 'skills', 'alpha', 'SKILL.md')));
+  assert.ok(existsSync(join(dst, '.agents', 'skills', 'alpha', 'SKILL.md')));
+  assert.ok(existsSync(join(dst, '.codex', 'hooks', 'guard.ps1')));
+  assert.ok(existsSync(join(dst, '.codex', 'hooks.json')));
   assert.ok(!existsSync(join(dst, '.claude', 'skills', 'alpha', 'SKILL.md')));
 });
 

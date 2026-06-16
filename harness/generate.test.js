@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { generate, generateSettings } from './generate.js';
+import { generate, generateCodexHooks, generateSettings } from './generate.js';
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), 'gen-'));
@@ -177,9 +177,9 @@ test('rmSync is scoped per category', () => {
   assert.ok(existsSync(join(outDir, 'skills', 'normal', 'SKILL.md')));
 });
 
-test('can generate a skills-only bundle for Codex', () => {
+test('can generate a skills-only bundle for Codex repo discovery', () => {
   const { root, manifestPath, overlayDir } = setupMulti();
-  const outDir = join(root, '.codex');
+  const outDir = join(root, '.agents');
   const built = generate({ repoRoot: root, manifestPath, outDir, overlayDir, categories: ['skills'] });
 
   assert.deepEqual(built.skills, ['normal']);
@@ -188,4 +188,23 @@ test('can generate a skills-only bundle for Codex', () => {
   assert.ok(existsSync(join(outDir, 'skills', 'normal', 'SKILL.md')));
   assert.ok(!existsSync(join(outDir, 'hooks')));
   assert.ok(!existsSync(join(outDir, 'commands')));
+});
+
+test('can generate Codex hooks and hooks.json without commands', () => {
+  const { root, manifestPath, overlayDir } = setupMulti();
+  const outDir = join(root, '.codex');
+  const built = generate({ repoRoot: root, manifestPath, outDir, overlayDir, categories: ['hooks'] });
+  generateCodexHooks({ outDir, hookNames: ['hook.ps1'] });
+
+  assert.deepEqual(built.skills, []);
+  assert.deepEqual(built.hooks, ['hook.ps1']);
+  assert.deepEqual(built.commands, []);
+  assert.ok(existsSync(join(outDir, 'hooks', 'hook.ps1')));
+  assert.ok(!existsSync(join(outDir, 'skills')));
+  assert.ok(!existsSync(join(outDir, 'commands')));
+
+  const hooks = JSON.parse(readFileSync(join(outDir, 'hooks.json'), 'utf8'));
+  assert.equal(hooks.hooks.PreToolUse[0].matcher, 'Bash');
+  assert.match(hooks.hooks.PreToolUse[0].hooks[0].command, /\.codex\/hooks\/hook\.ps1/);
+  assert.equal(hooks.hooks.PreToolUse[0].hooks[0].commandWindows, hooks.hooks.PreToolUse[0].hooks[0].command);
 });

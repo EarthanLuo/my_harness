@@ -5,6 +5,20 @@ import { statSync } from 'node:fs';
 import { loadManifest, resolveSourcePath } from './lib/resolve.js';
 import { ensureManualOnly } from './lib/frontmatter.js';
 
+const CODEX_ENABLED_HOOKS = ['rtk-rewrite.ps1', 'safety-guard.ps1'];
+
+function codexHookCommand(hookName) {
+  const script = `.codex/hooks/${hookName}`;
+  const command = `pwsh -NoProfile -File "$(git rev-parse --show-toplevel)/${script}"`;
+  return {
+    type: 'command',
+    command,
+    commandWindows: command,
+    timeout: hookName === 'rtk-rewrite.ps1' ? 5 : 3,
+    statusMessage: hookName === 'rtk-rewrite.ps1' ? 'Checking RTK rewrite' : 'Checking safety policy',
+  };
+}
+
 function generateCategory({ manifest, category, repoRoot, overlayDir, skillsOut, onBuilt }) {
   const entries = manifest[category];
   if (!entries || entries.length === 0) return;
@@ -91,6 +105,22 @@ export function generateSettings({ outDir, settingsPath }) {
   }
 }
 
+export function generateCodexHooks({ outDir, hookNames = CODEX_ENABLED_HOOKS } = {}) {
+  mkdirSync(outDir, { recursive: true });
+  const hooks = hookNames.map(codexHookCommand);
+  const config = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks,
+        },
+      ],
+    },
+  };
+  writeFileSync(join(outDir, 'hooks.json'), JSON.stringify(config, null, 2) + '\n');
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const repoRoot = resolve(import.meta.dirname, '..');
   const claudeBuilt = generate({
@@ -104,16 +134,27 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     settingsPath: resolve(import.meta.dirname, 'settings.json'),
   });
 
+  const agentBuilt = generate({
+    repoRoot,
+    manifestPath: resolve(import.meta.dirname, 'manifest.json'),
+    outDir: resolve(repoRoot, '.agents'),
+    overlayDir: resolve(import.meta.dirname, 'overlays'),
+    categories: ['skills'],
+  });
   const codexBuilt = generate({
     repoRoot,
     manifestPath: resolve(import.meta.dirname, 'manifest.json'),
     outDir: resolve(repoRoot, '.codex'),
     overlayDir: resolve(import.meta.dirname, 'overlays'),
-    categories: ['skills'],
+    categories: ['hooks'],
+  });
+  generateCodexHooks({
+    outDir: resolve(repoRoot, '.codex'),
   });
 
   const claudeTotal = claudeBuilt.skills.length + claudeBuilt.hooks.length + claudeBuilt.commands.length;
   console.log(`Generated .claude/: ${claudeBuilt.skills.length} skills, ${claudeBuilt.hooks.length} hooks, ${claudeBuilt.commands.length} commands`);
-  console.log(`Generated .codex/: ${codexBuilt.skills.length} skills`);
-  console.log(`Total: ${claudeTotal + codexBuilt.skills.length} files`);
+  console.log(`Generated .agents/: ${agentBuilt.skills.length} skills`);
+  console.log(`Generated .codex/: ${codexBuilt.hooks.length} hooks, hooks.json`);
+  console.log(`Total: ${claudeTotal + agentBuilt.skills.length + codexBuilt.hooks.length + 1} files`);
 }

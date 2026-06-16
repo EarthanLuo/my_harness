@@ -1,20 +1,53 @@
 import { resolve, join } from 'node:path';
-import { existsSync, statSync, readdirSync } from 'node:fs';
+import { existsSync, statSync, readdirSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { resolveTargets, resolveFlags, syncTarget } from './lib/sync.js';
+import { pruneDirectory, resolveTargets, resolveFlags, syncDirectory, syncTarget } from './lib/sync.js';
 
 function resolveSuites(flags, repoRoot) {
   if (flags.source && flags.suite === 'both') {
     throw new Error('--source can only be used with a single --suite');
   }
 
-  const names = flags.suite === 'both' ? ['claude', 'codex'] : [flags.suite];
-  return names.map(name => ({
-    name,
-    source: flags.source ? resolve(flags.source) : join(repoRoot, `.${name}`),
-    targetDir: `.${name}`,
-  }));
+  const claudeSource = flags.source && flags.suite === 'claude' ? resolve(flags.source) : join(repoRoot, '.claude');
+  const codexRoot = flags.source && flags.suite === 'codex' ? resolve(flags.source) : repoRoot;
+
+  const suites = {
+    claude: [
+      { name: 'claude', source: claudeSource, targetDir: '.claude', mode: 'managed' },
+    ],
+    codex: [
+      { name: 'codex-skills', source: join(codexRoot, '.agents'), targetDir: '.agents', mode: 'managed' },
+      { name: 'codex-hooks', source: join(codexRoot, '.codex'), targetDir: '.codex', mode: 'codex-hooks' },
+    ],
+  };
+
+  return flags.suite === 'both'
+    ? [...suites.claude, ...suites.codex]
+    : suites[flags.suite];
+}
+
+function syncRootFile(srcFile, dstFile, { dryRun = false } = {}) {
+  if (!existsSync(srcFile)) return 'absent';
+  let needs = true;
+  if (existsSync(dstFile) && statSync(dstFile).isFile()) {
+    needs = !readFileSync(srcFile).equals(readFileSync(dstFile));
+  }
+  if (!needs) return 'unchanged';
+  if (!dryRun) {
+    mkdirSync(join(dstFile, '..'), { recursive: true });
+    writeFileSync(dstFile, readFileSync(srcFile));
+  }
+  return 'updated';
+}
+
+function syncCodexHooks(srcCodex, dstCodex, { prune = false, dryRun = false } = {}) {
+  const hooks = syncDirectory(join(srcCodex, 'hooks'), join(dstCodex, 'hooks'), { dryRun });
+  if (prune) hooks.deleted = pruneDirectory(join(srcCodex, 'hooks'), join(dstCodex, 'hooks'), { dryRun }).deleted;
+  return {
+    hooks,
+    hooksJson: syncRootFile(join(srcCodex, 'hooks.json'), join(dstCodex, 'hooks.json'), { dryRun }),
+  };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -62,9 +95,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const dstSuite = join(t.path, suite.targetDir);
       let result;
       try {
-        result = syncTarget(suite.source, dstSuite, {
-          prune: t.prune, overwriteSettings: t.overwriteSettings, dryRun: flags.dryRun,
-        });
+        result = suite.mode === 'codex-hooks'
+          ? syncCodexHooks(suite.source, dstSuite, { prune: t.prune, dryRun: flags.dryRun })
+          : syncTarget(suite.source, dstSuite, {
+            prune: t.prune, overwriteSettings: t.overwriteSettings, dryRun: flags.dryRun,
+          });
       } catch (err) {
         process.stdout.write(`  ${suite.targetDir}: ERROR: ${err.message}\n`);
         targetFailed = true;
@@ -72,18 +107,27 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       }
 
       process.stdout.write(`  ${suite.targetDir}\n`);
-      for (const dir of ['skills', 'hooks', 'commands']) {
-        const r = result[dir];
+      if (suite.mode === 'codex-hooks') {
+        const r = result.hooks;
         const up = r.updated || 0, un = r.unchanged || 0;
-        let line = `    ${dir.padEnd(10)} ${un} up-to-date, ${up} ${prefix}`;
+        let line = `    ${'hooks'.padEnd(10)} ${un} up-to-date, ${up} ${prefix}`;
         if (r.deleted > 0) line += `, ${r.deleted} ${flags.dryRun ? 'would delete' : 'deleted'}`;
         process.stdout.write(`${line}\n`);
-        if (flags.verbose && existsSync(join(suite.source, dir))) {
-          for (const name of readdirSync(join(suite.source, dir))) process.stdout.write(`      ${name}\n`);
+        process.stdout.write(`    hooks.json ${flags.dryRun && result.hooksJson === 'updated' ? 'would update' : result.hooksJson}\n`);
+      } else {
+        for (const dir of ['skills', 'hooks', 'commands']) {
+          const r = result[dir];
+          const up = r.updated || 0, un = r.unchanged || 0;
+          let line = `    ${dir.padEnd(10)} ${un} up-to-date, ${up} ${prefix}`;
+          if (r.deleted > 0) line += `, ${r.deleted} ${flags.dryRun ? 'would delete' : 'deleted'}`;
+          process.stdout.write(`${line}\n`);
+          if (flags.verbose && existsSync(join(suite.source, dir))) {
+            for (const name of readdirSync(join(suite.source, dir))) process.stdout.write(`      ${name}\n`);
+          }
         }
+        const sl = flags.dryRun ? `would ${result.settings}` : result.settings;
+        process.stdout.write(`    settings:   ${sl}\n`);
       }
-      const sl = flags.dryRun ? `would ${result.settings}` : result.settings;
-      process.stdout.write(`    settings:   ${sl}\n`);
     }
     if (targetFailed) {
       process.stdout.write(`  FAILED\n\n`);
