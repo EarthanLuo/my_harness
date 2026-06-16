@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
-import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory } from './lib/sync.js';
+import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory, pruneDirectory } from './lib/sync.js';
 
 function writeConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'sync-'));
@@ -226,4 +226,56 @@ test('syncDirectory: handles dst-file where src-has-directory (type conflict)', 
   assert.equal(r.updated, 1);
   assert.ok(existsSync(join(dst, 'entry', 'inner.txt')));
   assert.equal(readFileSync(join(dst, 'entry', 'inner.txt'), 'utf8'), 'nested');
+});
+
+test('pruneDirectory: deletes file in dst not in src', () => {
+  const { src, dst } = setupDirs();
+  writeFileSync(join(dst, 'extra.txt'), 'x');
+  writeFileSync(join(src, 'keep.txt'), 'k');
+  writeFileSync(join(dst, 'keep.txt'), 'k');
+  const r = pruneDirectory(src, dst);
+  assert.equal(r.deleted, 1);
+  assert.ok(!existsSync(join(dst, 'extra.txt')));
+  assert.ok(existsSync(join(dst, 'keep.txt')));
+});
+
+test('pruneDirectory: deletes directory tree only in dst', () => {
+  const { src, dst } = setupDirs();
+  mkdirSync(join(dst, 'extra'), { recursive: true });
+  writeFileSync(join(dst, 'extra', 'f.txt'), 'x');
+  const r = pruneDirectory(src, dst);
+  assert.equal(r.deleted, 1);
+  assert.ok(!existsSync(join(dst, 'extra')));
+});
+
+test('pruneDirectory: recurses into shared subdirectories', () => {
+  const { src, dst } = setupDirs();
+  mkdirSync(join(src, 'shared'), { recursive: true });
+  mkdirSync(join(dst, 'shared'), { recursive: true });
+  writeFileSync(join(src, 'shared', 'ok.txt'), 'ok');
+  writeFileSync(join(dst, 'shared', 'ok.txt'), 'ok');
+  writeFileSync(join(dst, 'shared', 'stale.txt'), 'stale');
+  const r = pruneDirectory(src, dst);
+  assert.equal(r.deleted, 1);
+  assert.ok(!existsSync(join(dst, 'shared', 'stale.txt')));
+});
+
+test('pruneDirectory: returns 0 when dst matches src', () => {
+  const { src, dst } = setupDirs();
+  writeFileSync(join(src, 'a.txt'), 'a');
+  writeFileSync(join(dst, 'a.txt'), 'a');
+  assert.equal(pruneDirectory(src, dst).deleted, 0);
+});
+
+test('pruneDirectory: returns 0 when dst empty', () => {
+  const { src, dst } = setupDirs();
+  assert.equal(pruneDirectory(src, dst).deleted, 0);
+});
+
+test('pruneDirectory: dryRun reports but does not delete', () => {
+  const { src, dst } = setupDirs();
+  writeFileSync(join(dst, 'extra.txt'), 'x');
+  const r = pruneDirectory(src, dst, { dryRun: true });
+  assert.equal(r.deleted, 1);
+  assert.ok(existsSync(join(dst, 'extra.txt')));
 });

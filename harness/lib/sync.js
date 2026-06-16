@@ -70,3 +70,19 @@ export function syncDirectory(srcDir, dstDir, { dryRun = false } = {}) {
   }
   return { updated, unchanged };
 }
+
+export function pruneDirectory(srcDir, dstDir, { dryRun = false } = {}) {
+  if (!existsSync(dstDir)) return { deleted: 0 };
+  let deleted = 0;
+  for (const name of readdirSync(dstDir)) {
+    const sp = join(srcDir, name), dp = join(dstDir, name);
+    if (!existsSync(sp)) {
+      if (!dryRun) rmSync(dp, { recursive: true, force: true });
+      deleted++;
+    } else {
+      const ss = statSync(sp), ds = statSync(dp);
+      if (ss.isDirectory() && ds.isDirectory()) deleted += pruneDirectory(sp, dp, { dryRun }).deleted;
+    }
+  }
+  return { deleted };
+}
