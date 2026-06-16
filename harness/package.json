@@ -1,0 +1,9 @@
+{
+  "name": "harness-bundle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.js",
+    "test": "node --test"
+  }
+}

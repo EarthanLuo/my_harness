@@ -1,0 +1,42 @@
+{
+  "sources": {
+    "matt": "third-party/skills/skills",
+    "sp": "third-party/superpowers/skills"
+  },
+  "skills": [
+    { "name": "using-superpowers", "source": "sp", "path": "using-superpowers" },
+    { "name": "brainstorming", "source": "sp", "path": "brainstorming" },
+    { "name": "writing-plans", "source": "sp", "path": "writing-plans" },
+    { "name": "executing-plans", "source": "sp", "path": "executing-plans" },
+    { "name": "subagent-driven-development", "source": "sp", "path": "subagent-driven-development" },
+    { "name": "dispatching-parallel-agents", "source": "sp", "path": "dispatching-parallel-agents" },
+    { "name": "using-git-worktrees", "source": "sp", "path": "using-git-worktrees" },
+    { "name": "finishing-a-development-branch", "source": "sp", "path": "finishing-a-development-branch" },
+    { "name": "verification-before-completion", "source": "sp", "path": "verification-before-completion" },
+    { "name": "writing-skills", "source": "sp", "path": "writing-skills" },
+    { "name": "receiving-code-review", "source": "sp", "path": "receiving-code-review" },
+    { "name": "requesting-code-review", "source": "sp", "path": "requesting-code-review" },
+    { "name": "tdd", "source": "matt", "path": "engineering/tdd" },
+    { "name": "diagnose", "source": "matt", "path": "engineering/diagnose" },
+    { "name": "to-prd", "source": "matt", "path": "engineering/to-prd" },
+    { "name": "to-issues", "source": "matt", "path": "engineering/to-issues" },
+    { "name": "triage", "source": "matt", "path": "engineering/triage" },
+    { "name": "prototype", "source": "matt", "path": "engineering/prototype" },
+    { "name": "grill-with-docs", "source": "matt", "path": "engineering/grill-with-docs" },
+    { "name": "improve-codebase-architecture", "source": "matt", "path": "engineering/improve-codebase-architecture" },
+    { "name": "zoom-out", "source": "matt", "path": "engineering/zoom-out" },
+    { "name": "setup-matt-pocock-skills", "source": "matt", "path": "engineering/setup-matt-pocock-skills" },
+    { "name": "review", "source": "matt", "path": "in-progress/review" },
+    { "name": "caveman", "source": "matt", "path": "productivity/caveman" },
+    { "name": "handoff", "source": "matt", "path": "productivity/handoff" },
+    { "name": "setup-pre-commit", "source": "matt", "path": "misc/setup-pre-commit" },
+    { "name": "git-guardrails-claude-code", "source": "matt", "path": "misc/git-guardrails-claude-code" },
+    { "name": "scaffold-exercises", "source": "matt", "path": "misc/scaffold-exercises" },
+    { "name": "teach", "source": "matt", "path": "productivity/teach", "manualOnly": true },
+    { "name": "edit-article", "source": "matt", "path": "personal/edit-article", "manualOnly": true },
+    { "name": "obsidian-vault", "source": "matt", "path": "personal/obsidian-vault", "manualOnly": true },
+    { "name": "writing-beats", "source": "matt", "path": "in-progress/writing-beats", "manualOnly": true },
+    { "name": "writing-fragments", "source": "matt", "path": "in-progress/writing-fragments", "manualOnly": true },
+    { "name": "writing-shape", "source": "matt", "path": "in-progress/writing-shape", "manualOnly": true }
+  ]
+}

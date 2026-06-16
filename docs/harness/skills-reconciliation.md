@@ -103,7 +103,9 @@
 - **T2**：通读 SP `systematic-debugging` 正文，把其独有点折叠进 matt `diagnose`（可选）。
 - **T3**：确认 `grill-me` 的无文档路径已被 `grill-with-docs` 的优雅降级覆盖；若有独有措辞值得保留则折叠。
 - **T4**：`requesting-code-review` 与 matt `review` 的边界写清楚（中途派审 vs 终局 diff 评审），避免触发竞争。
-- **T5**：偏写作/个人类 skill 纳入套件但加 `disable-model-invocation: true`（手动可启用、默认不自动触发，见 §4.2 备注）。注意 `teach`、`zoom-out` 上游已自带该标志。
+- **T5**：偏写作/个人类 skill 纳入套件但加 `disable-model-invocation: true`（手动可启用、默认不自动触发，见 §4.2 备注）。
+  - **已落地**：manifest 用 `manualOnly: true` 标记 6 个（`teach`、`edit-article`、`obsidian-vault`、`writing-beats`、`writing-fragments`、`writing-shape`），生成器幂等注入标志。
+  - **注意计数**：发布 bundle 中实际**手动触发的是 8 个**——除上述 6 个外，`zoom-out` 与 `setup-matt-pocock-skills` 上游 SKILL.md 已自带该标志。故 `manifest.json` 里 `manualOnly` 的数量不等于成品中手动触发 skill 的总数。
 
 ## 6. 本轮明确不做（后续轮次）
 
