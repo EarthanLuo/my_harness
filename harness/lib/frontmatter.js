@@ -4,7 +4,8 @@ export function ensureManualOnly(markdown) {
   if (!markdown.startsWith('---')) {
     throw new Error('SKILL.md has no leading frontmatter');
   }
-  const close = markdown.indexOf('\n---', 3);
+  const eol = markdown.includes('\r\n') ? '\r\n' : '\n';
+  const close = markdown.indexOf(eol + '---', 3);
   if (close === -1) {
     throw new Error('SKILL.md has unterminated frontmatter');
   }
@@ -12,5 +13,5 @@ export function ensureManualOnly(markdown) {
   if (/^disable-model-invocation:\s*true\s*$/m.test(head)) {
     return markdown;
   }
-  return head + '\n' + FLAG + markdown.slice(close);
+  return head + eol + FLAG + markdown.slice(close);
 }
