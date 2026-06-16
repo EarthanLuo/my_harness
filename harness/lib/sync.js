@@ -25,3 +25,21 @@ export function resolveTargets(cliTargets, configPath, defaultConfigPath) {
   else throw new Error('no targets specified (use --targets, --config, or create harness/sync-targets.json)');
   return entries.map(e => ({ ...e, path: resolve(e.path) }));
 }
+
+export function resolveFlags(argv) {
+  const flags = { noBuild: false, prune: false, overwriteSettings: false, dryRun: false, verbose: false, targets: [], config: null, source: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--no-build') flags.noBuild = true;
+    else if (a === '--prune') flags.prune = true;
+    else if (a === '--overwrite-settings') flags.overwriteSettings = true;
+    else if (a === '--dry-run') flags.dryRun = true;
+    else if (a === '--verbose') flags.verbose = true;
+    else if (a === '--source' && i + 1 < argv.length) flags.source = argv[++i];
+    else if (a === '--config' && i + 1 < argv.length) flags.config = argv[++i];
+    else if (a === '--targets') {
+      while (i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.targets.push(argv[++i]);
+    }
+  }
+  return flags;
+}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
-import { parseTargetsFile, resolveTargets } from './lib/sync.js';
+import { parseTargetsFile, resolveTargets, resolveFlags } from './lib/sync.js';
 
 function writeConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'sync-'));
@@ -75,4 +75,45 @@ test('resolveTargets: preserves per-target flags from config', () => {
   assert.equal(r.length, 1);
   assert.equal(r[0].prune, true);
   assert.equal(r[0].overwriteSettings, true);
+});
+
+test('resolveFlags: all defaults false', () => {
+  const f = resolveFlags([]);
+  assert.equal(f.noBuild, false);
+  assert.equal(f.prune, false);
+  assert.equal(f.overwriteSettings, false);
+  assert.equal(f.dryRun, false);
+  assert.equal(f.verbose, false);
+  assert.deepEqual(f.targets, []);
+  assert.equal(f.config, null);
+  assert.equal(f.source, null);
+});
+
+test('resolveFlags: --no-build, --prune, --overwrite-settings, --dry-run, --verbose', () => {
+  const f = resolveFlags(['--no-build', '--prune', '--overwrite-settings', '--dry-run', '--verbose']);
+  assert.equal(f.noBuild, true);
+  assert.equal(f.prune, true);
+  assert.equal(f.overwriteSettings, true);
+  assert.equal(f.dryRun, true);
+  assert.equal(f.verbose, true);
+});
+
+test('resolveFlags: --source captures next arg', () => {
+  assert.equal(resolveFlags(['--source', '/tmp/claude']).source, '/tmp/claude');
+});
+
+test('resolveFlags: --targets collects following args', () => {
+  const f = resolveFlags(['--targets', '/a', '/b', '--dry-run']);
+  assert.deepEqual(f.targets, ['/a', '/b']);
+  assert.equal(f.dryRun, true);
+});
+
+test('resolveFlags: --targets at end collects remaining', () => {
+  const f = resolveFlags(['--no-build', '--targets', '/a']);
+  assert.equal(f.noBuild, true);
+  assert.deepEqual(f.targets, ['/a']);
+});
+
+test('resolveFlags: --config captures next arg', () => {
+  assert.equal(resolveFlags(['--config', 'custom.json']).config, 'custom.json');
 });
