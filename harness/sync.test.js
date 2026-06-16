@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
 import { parseTargetsFile, resolveTargets } from './lib/sync.js';
@@ -67,4 +67,12 @@ test('resolveTargets: falls back to default config', () => {
 
 test('resolveTargets: throws when no targets at all', () => {
   assert.throws(() => resolveTargets([], null, '/nope'), /no targets specified/);
+});
+
+test('resolveTargets: preserves per-target flags from config', () => {
+  const p = writeConfig([{ path: '/a', prune: true, overwriteSettings: true }]);
+  const r = resolveTargets([], p, '/nope');
+  assert.equal(r.length, 1);
+  assert.equal(r[0].prune, true);
+  assert.equal(r[0].overwriteSettings, true);
 });
