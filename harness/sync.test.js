@@ -117,3 +117,15 @@ test('resolveFlags: --targets at end collects remaining', () => {
 test('resolveFlags: --config captures next arg', () => {
   assert.equal(resolveFlags(['--config', 'custom.json']).config, 'custom.json');
 });
+
+test('resolveFlags: --source followed by flag does not consume it', () => {
+  const f = resolveFlags(['--source', '--verbose']);
+  assert.equal(f.source, null);
+  assert.equal(f.verbose, true);
+});
+
+test('resolveFlags: --config followed by flag does not consume it', () => {
+  const f = resolveFlags(['--config', '--dry-run']);
+  assert.equal(f.config, null);
+  assert.equal(f.dryRun, true);
+});

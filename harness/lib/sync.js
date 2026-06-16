@@ -35,8 +35,8 @@ export function resolveFlags(argv) {
     else if (a === '--overwrite-settings') flags.overwriteSettings = true;
     else if (a === '--dry-run') flags.dryRun = true;
     else if (a === '--verbose') flags.verbose = true;
-    else if (a === '--source' && i + 1 < argv.length) flags.source = argv[++i];
-    else if (a === '--config' && i + 1 < argv.length) flags.config = argv[++i];
+    else if (a === '--source' && i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.source = argv[++i];
+    else if (a === '--config' && i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.config = argv[++i];
     else if (a === '--targets') {
       while (i + 1 < argv.length && !argv[i + 1].startsWith('--')) flags.targets.push(argv[++i]);
     }
