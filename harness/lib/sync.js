@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
 export function parseTargetsFile(configPath) {
@@ -52,13 +52,18 @@ export function syncDirectory(srcDir, dstDir, { dryRun = false } = {}) {
     const sp = join(srcDir, name), dp = join(dstDir, name);
     const st = statSync(sp);
     if (st.isDirectory()) {
+      if (existsSync(dp) && statSync(dp).isFile()) rmSync(dp);
       const sub = syncDirectory(sp, dp, { dryRun });
       updated += sub.updated; unchanged += sub.unchanged;
     } else {
       let needs = true;
-      if (existsSync(dp) && statSync(dp).isFile()) {
-        const sb = readFileSync(sp), db = readFileSync(dp);
-        if (sb.equals(db)) { needs = false; unchanged++; }
+      if (existsSync(dp)) {
+        if (statSync(dp).isFile()) {
+          const sb = readFileSync(sp), db = readFileSync(dp);
+          if (sb.equals(db)) { needs = false; unchanged++; }
+        } else if (statSync(dp).isDirectory()) {
+          if (!dryRun) rmSync(dp, { recursive: true, force: true });
+        }
       }
       if (needs) { if (!dryRun) writeFileSync(dp, readFileSync(sp)); updated++; }
     }

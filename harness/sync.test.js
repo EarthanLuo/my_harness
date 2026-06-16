@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve as pathResolve } from 'node:path';
 import { parseTargetsFile, resolveTargets, resolveFlags, syncDirectory } from './lib/sync.js';
@@ -204,4 +204,26 @@ test('syncDirectory: dryRun does not write', () => {
   const r = syncDirectory(src, dst, { dryRun: true });
   assert.equal(r.updated, 1);
   assert.ok(!existsSync(join(dst, 'a.txt')));
+});
+
+test('syncDirectory: handles dst-directory where src-has-file (type conflict)', () => {
+  const { src, dst } = setupDirs();
+  writeFileSync(join(src, 'entry'), 'file-content');
+  mkdirSync(join(dst, 'entry'), { recursive: true });
+  const r = syncDirectory(src, dst);
+  assert.equal(r.updated, 1);
+  assert.ok(existsSync(join(dst, 'entry')));
+  assert.equal(statSync(join(dst, 'entry')).isFile(), true);
+  assert.equal(readFileSync(join(dst, 'entry'), 'utf8'), 'file-content');
+});
+
+test('syncDirectory: handles dst-file where src-has-directory (type conflict)', () => {
+  const { src, dst } = setupDirs();
+  mkdirSync(join(src, 'entry'));
+  writeFileSync(join(src, 'entry', 'inner.txt'), 'nested');
+  writeFileSync(join(dst, 'entry'), 'old-file');
+  const r = syncDirectory(src, dst);
+  assert.equal(r.updated, 1);
+  assert.ok(existsSync(join(dst, 'entry', 'inner.txt')));
+  assert.equal(readFileSync(join(dst, 'entry', 'inner.txt'), 'utf8'), 'nested');
 });
