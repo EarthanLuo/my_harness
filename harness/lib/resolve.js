@@ -1,27 +1,38 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
-export function loadManifest(manifestPath) {
-  const data = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  if (!data.sources || typeof data.sources !== 'object') {
-    throw new Error('manifest: missing sources map');
+function validateEntries(entries, sources, category) {
+  const names = new Set();
+  for (const e of entries) {
+    if (!e.name) throw new Error(`${category} entry missing name`);
+    if (names.has(e.name)) throw new Error(`duplicate ${category} name: ${e.name}`);
+    names.add(e.name);
+
+    if (e.source === 'overlay') continue;
+
+    if (!sources[e.source]) throw new Error(`unknown source "${e.source}" on ${category} "${e.name}"`);
+
+    if (!e.path) throw new Error(`${category} "${e.name}" with source "${e.source}" is missing path`);
   }
-  if (!Array.isArray(data.skills)) {
-    throw new Error('manifest: skills must be an array');
-  }
-  const seen = new Set();
-  for (const s of data.skills) {
-    if (!s.name) throw new Error('manifest: a skill is missing name');
-    if (!s.path) throw new Error(`manifest: skill ${s.name} is missing path`);
-    if (!data.sources[s.source]) {
-      throw new Error(`manifest: skill ${s.name} has unknown source ${s.source}`);
-    }
-    if (seen.has(s.name)) throw new Error(`manifest: duplicate skill name ${s.name}`);
-    seen.add(s.name);
-  }
-  return data;
 }
 
-export function resolveSkillDir(manifest, entry, repoRoot) {
-  return resolve(repoRoot, manifest.sources[entry.source], entry.path);
+export function loadManifest(manifestPath) {
+  const raw = readFileSync(manifestPath, 'utf8');
+  const m = JSON.parse(raw);
+
+  validateEntries(m.skills, m.sources, 'skill');
+
+  if (m.hooks) validateEntries(m.hooks, m.sources, 'hook');
+
+  if (m.commands) validateEntries(m.commands, m.sources, 'command');
+
+  if (m.plugins) validateEntries(m.plugins, m.sources, 'plugin');
+
+  return m;
+}
+
+export function resolveSourcePath(manifest, entry, repoRoot) {
+  if (entry.source === 'overlay') return null;
+  const base = manifest.sources[entry.source];
+  return join(repoRoot, base, entry.path);
 }

@@ -1,7 +1,9 @@
 {
   "sources": {
     "matt": "third-party/skills/skills",
-    "sp": "third-party/superpowers/skills"
+    "sp": "third-party/superpowers/skills",
+    "rtk": "third-party/rtk/.claude",
+    "rtk-root": "third-party/rtk"
   },
   "skills": [
     { "name": "using-superpowers", "source": "sp", "path": "using-superpowers" },
@@ -38,5 +40,21 @@
     { "name": "writing-beats", "source": "matt", "path": "in-progress/writing-beats", "manualOnly": true },
     { "name": "writing-fragments", "source": "matt", "path": "in-progress/writing-fragments", "manualOnly": true },
     { "name": "writing-shape", "source": "matt", "path": "in-progress/writing-shape", "manualOnly": true }
-  ]
+  ],
+  "hooks": [
+    { "name": "rtk-rewrite.ps1", "source": "overlay" },
+    { "name": "safety-guard.ps1", "source": "overlay" },
+    { "name": "rtk-suggest.ps1", "source": "overlay" }
+  ],
+  "commands": [
+    { "name": "diagnose.md", "source": "rtk", "path": "commands/diagnose.md" },
+    { "name": "worktree.md", "source": "rtk", "path": "commands/worktree.md" },
+    { "name": "clean-worktree.md", "source": "rtk", "path": "commands/clean-worktree.md" },
+    { "name": "codereview.md", "source": "overlay" },
+    { "name": "audit-codebase.md", "source": "overlay" }
+  ],
+  "plugins": [
+    { "name": "rtk.ts", "source": "rtk-root", "path": "hooks/opencode/rtk.ts" }
+  ],
+  "settings": {}
 }

@@ -1,45 +1,168 @@
-import { cpSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { cpSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadManifest, resolveSkillDir } from './lib/resolve.js';
+import { statSync } from 'node:fs';
+import { loadManifest, resolveSourcePath } from './lib/resolve.js';
 import { ensureManualOnly } from './lib/frontmatter.js';
 
-export function generate({ repoRoot, manifestPath, outDir, overlayDir }) {
-  const manifest = loadManifest(manifestPath);
-  const skillsOut = join(outDir, 'skills');
-  rmSync(skillsOut, { recursive: true, force: true });
-  mkdirSync(skillsOut, { recursive: true });
+const CODEX_ENABLED_HOOKS = ['rtk-rewrite.ps1', 'safety-guard.ps1'];
 
-  const built = [];
-  for (const entry of manifest.skills) {
-    const src = resolveSkillDir(manifest, entry, repoRoot);
-    if (!existsSync(src)) {
-      throw new Error(`source missing for ${entry.name}: ${src}`);
+function codexHookCommand(hookName) {
+  const script = `.codex/hooks/${hookName}`;
+  const command = `pwsh -NoProfile -File "$(git rev-parse --show-toplevel)/${script}"`;
+  return {
+    type: 'command',
+    command,
+    commandWindows: command,
+    timeout: hookName === 'rtk-rewrite.ps1' ? 5 : 3,
+    statusMessage: hookName === 'rtk-rewrite.ps1' ? 'Checking RTK rewrite' : 'Checking safety policy',
+  };
+}
+
+function generateCategory({ manifest, category, repoRoot, overlayDir, skillsOut, onBuilt }) {
+  const entries = manifest[category];
+  if (!entries || entries.length === 0) return;
+
+  for (const entry of entries) {
+    const destDir = join(skillsOut, entry.name);
+
+    const src = resolveSourcePath(manifest, entry, repoRoot);
+    if (src) {
+      if (!existsSync(src)) {
+        throw new Error(`source missing for ${category} "${entry.name}": ${src}`);
+      }
+      mkdirSync(dirname(destDir), { recursive: true });
+      if (statSync(src).isDirectory()) {
+        cpSync(src, destDir, { recursive: true });
+      } else {
+        mkdirSync(dirname(destDir), { recursive: true });
+        copyFileSync(src, destDir);
+      }
+    } else {
+      mkdirSync(dirname(destDir), { recursive: true });
     }
-    const dest = join(skillsOut, entry.name);
-    cpSync(src, dest, { recursive: true });
 
     if (overlayDir) {
-      const ov = join(overlayDir, entry.name);
-      if (existsSync(ov)) cpSync(ov, dest, { recursive: true, force: true });
+      const ov = category === 'skills'
+        ? join(overlayDir, entry.name)
+        : join(overlayDir, category, entry.name);
+      if (existsSync(ov)) {
+        if (statSync(ov).isDirectory()) {
+          cpSync(ov, destDir, { recursive: true, force: true });
+        } else {
+          copyFileSync(ov, destDir);
+        }
+      }
     }
 
-    if (entry.manualOnly) {
-      const skillFile = join(dest, 'SKILL.md');
+    if (category === 'skills' && entry.manualOnly) {
+      const skillFile = join(destDir, 'SKILL.md');
       writeFileSync(skillFile, ensureManualOnly(readFileSync(skillFile, 'utf8')));
     }
-    built.push(entry.name);
+
+    if (onBuilt) onBuilt(entry.name);
   }
+}
+
+export function generate({ repoRoot, manifestPath, outDir, overlayDir, categories = ['skills', 'hooks', 'commands'] }) {
+  const manifest = loadManifest(manifestPath);
+
+  const cleanDirs = {};
+  for (const category of categories) {
+    cleanDirs[category] = join(outDir, category);
+  }
+
+  for (const category of categories) {
+    const dir = cleanDirs[category];
+    if (manifest[category] && manifest[category].length > 0) {
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(dir, { recursive: true });
+    }
+  }
+
+  const built = { skills: [], hooks: [], commands: [] };
+
+  for (const category of categories) {
+    built[category] = [];
+    generateCategory({
+      manifest,
+      category,
+      repoRoot,
+      overlayDir,
+      skillsOut: cleanDirs[category],
+      onBuilt: (name) => built[category].push(name),
+    });
+  }
+
   return built;
+}
+
+export function generateSettings({ outDir, settingsPath }) {
+  const settingsFile = join(outDir, 'settings.json');
+  if (existsSync(settingsPath)) {
+    copyFileSync(settingsPath, settingsFile);
+  }
+}
+
+export function generateCodexHooks({ outDir, hookNames = CODEX_ENABLED_HOOKS } = {}) {
+  mkdirSync(outDir, { recursive: true });
+  const hooks = hookNames.map(codexHookCommand);
+  const config = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks,
+        },
+      ],
+    },
+  };
+  writeFileSync(join(outDir, 'hooks.json'), JSON.stringify(config, null, 2) + '\n');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const repoRoot = resolve(import.meta.dirname, '..');
-  const count = generate({
+  const claudeBuilt = generate({
     repoRoot,
     manifestPath: resolve(import.meta.dirname, 'manifest.json'),
     outDir: resolve(repoRoot, '.claude'),
     overlayDir: resolve(import.meta.dirname, 'overlays'),
-  }).length;
-  console.log(`Generated .claude/skills with ${count} skills`);
+  });
+  generateSettings({
+    outDir: resolve(repoRoot, '.claude'),
+    settingsPath: resolve(import.meta.dirname, 'settings.json'),
+  });
+
+  const agentBuilt = generate({
+    repoRoot,
+    manifestPath: resolve(import.meta.dirname, 'manifest.json'),
+    outDir: resolve(repoRoot, '.agents'),
+    overlayDir: resolve(import.meta.dirname, 'overlays'),
+    categories: ['skills'],
+  });
+  const codexBuilt = generate({
+    repoRoot,
+    manifestPath: resolve(import.meta.dirname, 'manifest.json'),
+    outDir: resolve(repoRoot, '.codex'),
+    overlayDir: resolve(import.meta.dirname, 'overlays'),
+    categories: ['hooks'],
+  });
+  generateCodexHooks({
+    outDir: resolve(repoRoot, '.codex'),
+  });
+
+  const opencodeBuilt = generate({
+    repoRoot,
+    manifestPath: resolve(import.meta.dirname, 'manifest.json'),
+    outDir: resolve(repoRoot, '.opencode'),
+    overlayDir: resolve(import.meta.dirname, 'overlays'),
+    categories: ['plugins'],
+  });
+
+  const claudeTotal = claudeBuilt.skills.length + claudeBuilt.hooks.length + claudeBuilt.commands.length;
+  console.log(`Generated .claude/: ${claudeBuilt.skills.length} skills, ${claudeBuilt.hooks.length} hooks, ${claudeBuilt.commands.length} commands`);
+  console.log(`Generated .agents/: ${agentBuilt.skills.length} skills`);
+  console.log(`Generated .codex/: ${codexBuilt.hooks.length} hooks, hooks.json`);
+  console.log(`Generated .opencode/: ${opencodeBuilt.plugins.length} plugins`);
+  console.log(`Total: ${claudeTotal + agentBuilt.skills.length + codexBuilt.hooks.length + 1 + opencodeBuilt.plugins.length} files`);
 }

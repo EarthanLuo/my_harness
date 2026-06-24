@@ -1,18 +1,20 @@
 # my_harness
 
-从多个开源 agent harness「取长补短」，组装成一份**可移植的项目级 `.claude/` 套件**。
+从多个开源 agent harness「取长补短」，组装成一份**可移植的项目级 `.claude/` / Codex 套件**。
 
-本仓既是这份套件的**版本化源头与组装车间**，也 dogfood 自用：把整个 `.claude/` 目录拷进任意项目即可在那里启用同一套 skills。
+本仓既是这份套件的**版本化源头与组装车间**，也 dogfood 自用：把 `.claude/`，或 Codex 的 `.agents/` + `.codex/` 目录拷进任意项目即可在那里启用同一套 skills/hooks。
 
 ## 它解决什么
 
-社区里几套 Claude Code / agent harness 各有所长，但分散在不同安装通道、彼此还有重叠。这个仓库把它们 vendored 进 `third-party/`，按一份显式清单挑选、去重、改造，生成一份自包含、可移植、可复现的 skill 套件。
+社区里几套 Claude Code / Codex / agent harness 各有所长，但分散在不同安装通道、彼此还有重叠。这个仓库把它们 vendored 进 `third-party/`，按一份显式清单挑选、去重、改造，生成一份自包含、可移植、可复现的 skill 套件。
 
 ## 仓库结构
 
 ```
 my_harness/
-├── .claude/skills/        ← 生成产物：精选 skill 套件（提交进仓，可移植）
+├── .claude/               ← 生成产物：Claude Code skills/hooks/commands/settings（提交进仓）
+├── .agents/skills/        ← 生成产物：Codex repo skills（提交进仓，可移植）
+├── .codex/                ← 生成产物：Codex hooks.json + hooks（提交进仓）
 ├── harness/               ← 组装车间
 │   ├── manifest.json      ← 精选清单（来源 + 路径 + 是否手动触发）
 │   ├── generate.js        ← 生成器（manifest 驱动，Node 零依赖）
@@ -30,11 +32,11 @@ my_harness/
 
 ```bash
 cd harness
-node generate.js   # 从 third-party/ 子模块按 manifest 重建 ../.claude/skills
+node generate.js   # 从 third-party/ 子模块按 manifest 重建 ../.claude/、../.agents/skills 和 ../.codex/hooks
 node --test        # 跑生成器测试
 ```
 
-`.claude/skills/` 是**提交进仓的可移植产物**——不要手改它（regen 会覆盖）；本地修改请放进 `harness/overlays/<skill>/`。详见 [`harness/README.md`](harness/README.md)。
+`.claude/`、`.agents/skills/` 和 `.codex/hooks*` 是**提交进仓的可移植产物**——不要手改它们（regen 会覆盖）；本地修改请放进 `harness/overlays/`。详见 [`harness/README.md`](harness/README.md)。
 
 ## 取材来源（`third-party/` 子模块）
 
